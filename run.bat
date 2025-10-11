@@ -24,7 +24,8 @@ echo Server started. Logging to server.log
 goto menu
 
 :restart
-call :stop
+REM Kill the node server (assumes only one server.js running)
+for /f "tokens=2" %%a in ('tasklist ^| findstr node.exe') do taskkill /F /PID %%a
 goto start
 
 :stop

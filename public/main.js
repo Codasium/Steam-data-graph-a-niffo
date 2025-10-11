@@ -53,5 +53,52 @@ fetchSteamData();
 fetchCS2Data();
 
 // Fetch every 10 seconds
-setInterval(fetchSteamData, 10000);
-setInterval(fetchCS2Data, 10000)
+
+setInterval(fetchSteamData, 60000);
+setInterval(fetchCS2Data, 60000);
+
+// Fetch stats data and render kills chart
+fetch('http://localhost:3000/stats-data')
+  .then(res => res.json())
+  .then(data => {
+    console.log('Database data:', data);
+
+    // Filter only kill stats
+    const killStats = data.filter(stat => stat.stat_name === 'total_kills');
+
+    // Create labels (for example, timestamps)
+    const labels = killStats.map((_, i) => `Entry ${i + 1}`);
+    const values = killStats.map(stat => stat.stat_value);
+
+    // Calculate 1% below min and 1% above max
+    const minValue = Math.min(...values);
+    const maxValue = Math.max(...values);
+    const rangeMin = minValue * 0.999;
+    const rangeMax = maxValue * 1.001;
+
+    const ctx = document.getElementById('killsChart').getContext('2d');
+
+    new Chart(ctx, {
+      type: 'line',
+      data: {
+        labels,
+        datasets: [{
+          label: 'Total Kills Over Time',
+          data: values,
+          borderColor: 'rgb(75, 192, 192)',
+          tension: 0.1,
+        }]
+      },
+      options: {
+        responsive: true,
+        scales: {
+          y: {
+            beginAtZero: false,
+            min: rangeMin,
+            max: rangeMax
+          }
+        }
+      }
+    });
+  })
+  .catch(err => console.error('Error loading data:', err));

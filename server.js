@@ -17,7 +17,16 @@ const STEAM_ID = "76561198930356801";
 const PORT = 3000;
 const app = express();
 
+const LAST_STATS_FILE = path.join(__dirname, 'last_stats.txt');
 let lastStatsString = "";
+// Load lastStatsString from file if exists
+try {
+  if (fs.existsSync(LAST_STATS_FILE)) {
+    lastStatsString = fs.readFileSync(LAST_STATS_FILE, 'utf8');
+  }
+} catch (err) {
+  console.error('Error reading last_stats.txt:', err);
+}
 
 app.get('/steam-data', (req, res) => {
   const apiUrl = `https://api.steampowered.com/ISteamUser/GetPlayerSummaries/v2/?key=${API_KEY}&steamids=${STEAM_ID}`;
@@ -75,6 +84,12 @@ app.get('/cs2-stats', async (req, res) => {
       saveStats(data.playerstats.stats, newDb);
 
       lastStatsString = currentStatsString;
+      // Save lastStatsString to file
+      try {
+        fs.writeFileSync(LAST_STATS_FILE, lastStatsString, 'utf8');
+      } catch (err) {
+        console.error('Error writing last_stats.txt:', err);
+      }
       console.log(`New database created: ${newDbPath}`);
     }
 
@@ -91,6 +106,32 @@ function saveStats(statsArray, dbInstance) {
     stmt.run(stat.name, stat.value);
   });
 }
+
+
+app.get('/stats-data', (req, res) => {
+  try {
+    // Get all .db files
+    const dbFiles = fs.readdirSync(__dirname).filter(f => f.endsWith('.db'));
+    if (dbFiles.length === 0) return res.status(404).json({ error: 'No database files found' });
+
+    let allRows = [];
+    dbFiles.forEach(dbFile => {
+      try {
+        const db = new Database(path.join(__dirname, dbFile));
+        const rows = db.prepare('SELECT * FROM cs2_stats').all();
+        // Optionally, add dbFile info to each row for traceability
+        rows.forEach(row => row.dbFile = dbFile);
+        allRows = allRows.concat(rows);
+      } catch (dbErr) {
+        console.error(`Error reading ${dbFile}:`, dbErr);
+      }
+    });
+    res.json(allRows);
+  } catch (err) {
+    console.error('Error reading stats:', err);
+    res.status(500).json({ error: 'Failed to load stats data' });
+  }
+});
 
 app.use(express.static(path.join(__dirname, 'public')));
 app.use(cors());

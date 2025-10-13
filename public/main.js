@@ -73,8 +73,8 @@ fetch('http://localhost:3000/stats-data')
     // Calculate 1% below min and 1% above max
     const minValue = Math.min(...values);
     const maxValue = Math.max(...values);
-    const rangeMin = minValue * 0.999;
-    const rangeMax = maxValue * 1.001;
+    const rangeMin = Math.round(minValue * 0.999);
+    const rangeMax = Math.round(maxValue * 1.001);
 
     const ctx = document.getElementById('killsChart').getContext('2d');
 

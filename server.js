@@ -8,7 +8,11 @@ const express = require('express');
 const cors = require('cors');
 const Database = require('better-sqlite3');
 
-const dbPath = path.join(__dirname, 'cs2_stats.db');
+const dataDir = path.join(__dirname, 'data');
+if (!fs.existsSync(dataDir)) {
+  fs.mkdirSync(dataDir);
+}
+const dbPath = path.join(dataDir, 'cs2_stats.db');
 const db = new Database(dbPath);
 
 const API_KEY = "7BC355C9F92176761CD404109A71D1C4";
@@ -69,7 +73,7 @@ app.get('/cs2-stats', async (req, res) => {
     const currentStatsString = JSON.stringify(data.playerstats.stats);
     if (currentStatsString !== lastStatsString) {
       const timestamp = Date.now();
-      const newDbPath = path.join(__dirname, `cs2_stats_${timestamp}.db`);
+      const newDbPath = path.join(dataDir, `cs2_stats_${timestamp}.db`);
       const newDb = new Database(newDbPath);
 
       newDb.prepare(`
@@ -110,14 +114,14 @@ function saveStats(statsArray, dbInstance) {
 
 app.get('/stats-data', (req, res) => {
   try {
-    // Get all .db files
-    const dbFiles = fs.readdirSync(__dirname).filter(f => f.endsWith('.db'));
+    // Get all .db files in data folder
+    const dbFiles = fs.readdirSync(dataDir).filter(f => f.endsWith('.db'));
     if (dbFiles.length === 0) return res.status(404).json({ error: 'No database files found' });
 
     let allRows = [];
     dbFiles.forEach(dbFile => {
       try {
-        const db = new Database(path.join(__dirname, dbFile));
+        const db = new Database(path.join(dataDir, dbFile));
         const rows = db.prepare('SELECT * FROM cs2_stats').all();
         // Optionally, add dbFile info to each row for traceability
         rows.forEach(row => row.dbFile = dbFile);

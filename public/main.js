@@ -66,9 +66,35 @@ fetch('http://localhost:3000/stats-data')
     // Filter only kill stats
     const killStats = data.filter(stat => stat.stat_name === 'total_kills');
 
-    // Create labels (for example, timestamps)
-    const labels = killStats.map((_, i) => `Entry ${i + 1}`);
-    const values = killStats.map(stat => stat.stat_value);
+    // Build values and labels. Labels use timestamp from the db filename
+    // (files named like cs2_stats_<ms>.db) if present, otherwise fall back
+    // to the row.timestamp value, otherwise the current date.
+    const values = killStats.map(stat => Number(stat.stat_value));
+
+    if (values.length === 0) {
+      console.warn('No kill stats available to plot');
+      return;
+    }
+
+    const labels = killStats.map(stat => {
+      // Try to extract ms timestamp from dbFile (e.g. cs2_stats_169... .db)
+      if (stat.dbFile) {
+        const m = stat.dbFile.match(/cs2_stats_(\d+)\.db$/);
+        if (m) {
+          const d = new Date(Number(m[1]));
+          if (!isNaN(d)) return d.toLocaleDateString();
+        }
+      }
+
+      // Fallback to row.timestamp (could be SQLite DATETIME string)
+      if (stat.timestamp) {
+  const d = new Date(stat.timestamp);
+  if (!isNaN(d)) return d.toLocaleDateString();
+      }
+
+  // Final fallback: now (date only)
+  return new Date().toLocaleDateString();
+    });
 
     // Calculate 1% below min and 1% above max
     const minValue = Math.min(...values);

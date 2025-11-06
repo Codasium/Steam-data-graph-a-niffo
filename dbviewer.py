@@ -1,6 +1,6 @@
 from tkinter import *
 from tkinter import filedialog, messagebox
-import sqlite3, os, csv
+import sqlite3, os, csv, sys
 
 def on_mousewheel(event):
     canvas.yview_scroll(-1*(event.delta//120), "units")
@@ -60,7 +60,14 @@ def entry_changed(event, row_data, col_index):
     cursor.execute(query, (entry_text, row_data[0]))
     connection.commit()
 
-file_path = filedialog.askopenfilename(filetypes=[("SQLite and CSV databases", "*.db;*.csv"), ("All files", "*.*")])
+# Create a hidden root for the file dialog to avoid multiple Tk instances
+root = Tk()
+root.withdraw()
+
+file_path = filedialog.askopenfilename(parent=root, filetypes=[("SQLite and CSV databases", "*.db;*.csv"), ("All files", "*.*")])
+if not file_path:
+    messagebox.showinfo("Info", "No file selected. Exiting.")
+    sys.exit(0)
 
 
 if file_path.endswith(".csv"):
@@ -113,9 +120,20 @@ else:
     # Haalt alle tabellen
     cursor.execute("SELECT name FROM sqlite_master WHERE type='table'")
     tables = cursor.fetchall()
+    if not tables:
+        messagebox.showerror("Error", f"No tables found in database: {file_path}")
+        cursor.close()
+        connection.close()
+        sys.exit(1)
     filename = tables[0][0]
 
-root = Tk()
+    # Get column names for the selected table so the UI can reference them
+    cursor.execute(f"PRAGMA table_info({filename})")
+    cols = cursor.fetchall()
+    kolommen = [c[1] for c in cols]
+    num_kolommen = len(kolommen)
+
+root.deiconify()
 root.title('Database editor')
 
 # Maakt de scrollbar
@@ -160,7 +178,9 @@ rows = cursor.fetchall()
 for row_index, row_data in enumerate(rows):
     for col_index, col_data in enumerate(row_data):
         entry = Entry(frame)
-        entry.insert(END, col_data)
+        # Ensure we insert a string (None or bytes can cause Tcl errors)
+        text = '' if col_data is None else str(col_data)
+        entry.insert(END, text)
         entry.grid(row=row_index + 1, column=col_index)
         entry.bind("<KeyRelease>", lambda event, row_data=row_data, col_index=col_index: entry_changed(event, row_data, col_index))
 

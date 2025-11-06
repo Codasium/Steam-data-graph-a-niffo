@@ -14,8 +14,6 @@ if (!fs.existsSync(dataDir)) {
 }
 const dbPath = path.join(dataDir, 'cs2_stats.db');
 const db = new Database(dbPath);
-
-// Ensure main DB has correct table schema (include steamid)
 db.prepare(`
   CREATE TABLE IF NOT EXISTS cs2_stats (
     id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -27,7 +25,6 @@ db.prepare(`
 `).run();
 
 const API_KEY = "7BC355C9F92176761CD404109A71D1C4";
-// Put Steam IDs you want to track in this array
 const STEAM_IDS = [
   "76561198930356801",
   "76561198208756329",
@@ -37,8 +34,6 @@ const STEAM_IDS = [
 const PORT = 3000;
 const app = express();
 
-// We'll persist last-stats per-steamid inside the data folder as
-// last_stats_<steamid>.txt when new stats are recorded.
 const VANITY_CACHE_FILE = path.join(dataDir, 'vanity_cache.json');
 let vanityCache = {};
 try {
@@ -51,13 +46,10 @@ try {
 }
 
 async function resolveSteamId(inputId) {
-  // If it's already numeric, return as-is
   if (/^\d+$/.test(inputId)) return inputId;
 
-  // Check cache
   if (vanityCache[inputId]) return vanityCache[inputId];
 
-  // Call Steam ResolveVanityURL
   try {
     const url = `https://api.steampowered.com/ISteamUser/ResolveVanityURL/v1/?key=${API_KEY}&vanityurl=${encodeURIComponent(inputId)}`;
     const resp = await fetch(url);
@@ -107,7 +99,6 @@ app.get('/cs2-stats', async (req, res) => {
     const aggregated = [];
     for (const steamId of STEAM_IDS) {
       try {
-        // Resolve vanity name to numeric SteamID if needed
         const resolved = await resolveSteamId(steamId);
         if (!resolved) {
           aggregated.push({ steamid: steamId, error: 'Could not resolve steam id (vanity?)' });
@@ -123,7 +114,7 @@ app.get('/cs2-stats', async (req, res) => {
         }
 
         const currentStatsString = JSON.stringify(data.playerstats.stats);
-        // per-steamid last file
+
   const lastFile = path.join(dataDir, `last_stats_${resolved}.txt`);
         let lastStatsForUser = '';
         try {
@@ -150,7 +141,6 @@ app.get('/cs2-stats', async (req, res) => {
 
           saveStats(data.playerstats.stats, newDb, resolved);
 
-          // persist last stats for this user
           try {
             fs.writeFileSync(lastFile, currentStatsString, 'utf8');
           } catch (err) {
@@ -184,7 +174,6 @@ function saveStats(statsArray, dbInstance, steamid) {
 
 app.get('/stats-data', (req, res) => {
   try {
-    // Get all .db files in data folder
     const dbFiles = fs.readdirSync(dataDir).filter(f => f.endsWith('.db'));
     if (dbFiles.length === 0) return res.status(404).json({ error: 'No database files found' });
 
@@ -193,19 +182,14 @@ app.get('/stats-data', (req, res) => {
       try {
         const db = new Database(path.join(dataDir, dbFile));
         const rows = db.prepare('SELECT * FROM cs2_stats').all();
-        // Optionally, add dbFile info to each row for traceability
         rows.forEach(row => {
           row.dbFile = dbFile;
-          // If steamid is missing (older DBs), try to extract it from filename
           if (!row.steamid) {
-            // Try patterns: cs2_stats_<steamid>_<timestamp>.db or cs2_stats_<timestamp>.db
-            // Accept alphanumeric (and other) steamid values (anything except underscore)
             const m1 = dbFile.match(/^cs2_stats_([^_]+)_(\d+)\.db$/);
             const m2 = dbFile.match(/^cs2_stats_(\d+)\.db$/);
             if (m1) {
               row.steamid = m1[1];
             } else if (m2) {
-              // this may be a timestamp-only file; leave steamid null
               row.steamid = null;
             }
           }
